@@ -1,0 +1,17 @@
+{
+  "name": "Carl Sandburg Swim Guard",
+  "short_name": "Swim Guard",
+  "description": "Swim lesson management for Carl Sandburg Swim Guard.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#edf4fb",
+  "theme_color": "#10365c",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
