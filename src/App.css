@@ -483,6 +483,54 @@ code {
   margin: 0 0 8px;
 }
 
+.roster-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.6fr) repeat(3, minmax(145px, 1fr));
+  gap: 8px 10px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.roster-filters label {
+  margin: 0;
+}
+
+.filter-field {
+  display: grid;
+  gap: 6px;
+}
+
+.roster-filters input,
+.roster-filters select {
+  min-height: 42px;
+}
+
+.time-slot-group {
+  background: var(--paper);
+}
+
+.time-slot-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 17px;
+  color: var(--navy);
+  background: var(--teal);
+  border-bottom: 1px solid var(--line);
+}
+
+.time-slot-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.time-slot-heading span {
+  color: var(--muted);
+  font: 11px/1.2 Arial, sans-serif;
+}
+
 .student-list,
 .staff-list,
 .staff-management-list,
@@ -566,6 +614,13 @@ code {
   background: var(--paper);
   color: var(--muted);
   font: 700 11px/1.2 Arial, sans-serif;
+}
+
+.inactive-student-message {
+  margin: 0;
+  padding: 0 17px 17px;
+  color: var(--muted);
+  font: 12px/1.4 Arial, sans-serif;
 }
 
 .attendance-button {
@@ -862,8 +917,22 @@ code {
     padding: 20px 15px;
   }
 
+  .roster-section {
+    padding-top: 24px;
+  }
+
   .section-heading {
     align-items: flex-start;
+  }
+
+  .roster-filters {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 9px;
+    margin-bottom: 22px;
+  }
+
+  .roster-filters .search-field {
+    grid-column: 1 / -1;
   }
 
   .assignment-form,
@@ -922,6 +991,20 @@ code {
   .student-row {
     align-items: flex-start;
     padding: 14px;
+    gap: 12px;
+  }
+
+  .time-slot-heading {
+    padding: 13px 14px;
+  }
+
+  .attendance-row,
+  .assignment-form,
+  .inactive-student-message,
+  .student-edit,
+  .notes-panel {
+    padding-left: 14px;
+    padding-right: 14px;
   }
 
   .student-status {

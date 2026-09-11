@@ -203,6 +203,9 @@ function RosterWorkspace({ role, userId, onSignOut }) {
   const [notifications, setNotifications] = useState([])
   const [invites, setInvites] = useState([])
   const [search, setSearch] = useState('')
+  const [studentStatusFilter, setStudentStatusFilter] = useState('active')
+  const [instructorFilter, setInstructorFilter] = useState('all')
+  const [timeFilter, setTimeFilter] = useState('all')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [savingStudentId, setSavingStudentId] = useState(null)
@@ -253,9 +256,6 @@ function RosterWorkspace({ role, userId, onSignOut }) {
     }
   }, [role, userId])
 
-  const visibleStudents = students.filter((student) =>
-    getStudentName(student).toLowerCase().includes(search.toLowerCase()),
-  )
   const sessionsByStudent = Object.groupBy(sessions, (session) => session.student_id)
   const getCurrentSession = (studentId) => {
     const studentSessions = (sessionsByStudent[studentId] || [])
@@ -268,6 +268,18 @@ function RosterWorkspace({ role, userId, onSignOut }) {
 
     return studentSessions[0] || null
   }
+  const visibleStudents = students
+    .filter((student) => role !== 'head_guard' || studentStatusFilter === 'all' || (student.active !== false) === (studentStatusFilter === 'active'))
+    .filter((student) => {
+      const currentSession = getCurrentSession(student.id)
+      return role !== 'head_guard' || instructorFilter === 'all' || currentSession?.instructor_id === instructorFilter
+    })
+    .filter((student) => {
+      const currentSession = getCurrentSession(student.id)
+      return role !== 'head_guard' || timeFilter === 'all' || currentSession?.scheduled_time?.slice(0, 5) === timeFilter
+    })
+    .filter((student) => getStudentName(student).toLowerCase().includes(search.toLowerCase()))
+    .sort((firstStudent, secondStudent) => getStudentName(firstStudent).localeCompare(getStudentName(secondStudent)))
   const notificationStudentNames = Object.fromEntries(notifications.map((notification) => {
     const session = sessions.find((currentSession) => currentSession.id === notification.session_id)
     return [notification.session_id, getStudentName(students.find((student) => student.id === session?.student_id) || {})]
@@ -277,6 +289,12 @@ function RosterWorkspace({ role, userId, onSignOut }) {
     event.preventDefault()
     setError('')
     setSavingStudentId(studentId)
+    const student = students.find((currentStudent) => currentStudent.id === studentId)
+    if (student?.active === false) {
+      setError('Inactive students cannot be scheduled. Reactivate the student first.')
+      setSavingStudentId(null)
+      return
+    }
     const formData = new FormData(event.currentTarget)
     const scheduledDate = formData.get('scheduled_date')
     const scheduledDay = new Date(`${scheduledDate}T12:00:00`).getDay()
@@ -497,6 +515,21 @@ function RosterWorkspace({ role, userId, onSignOut }) {
       setError('We could not update that student. Please try again.')
     } else {
       setStudents((currentStudents) => currentStudents.map((student) => student.id === studentId ? updatedStudent : student))
+      if (updates.active === false) {
+        const { data: cancelledSessions, error: sessionError } = await supabase
+          .from('sessions')
+          .update({ status: 'cancelled' })
+          .eq('student_id', studentId)
+          .eq('status', 'scheduled')
+          .select('id')
+
+        if (sessionError) {
+          setError('The student was updated, but their scheduled lessons could not be cancelled.')
+        } else if (cancelledSessions?.length) {
+          const cancelledIds = new Set(cancelledSessions.map((session) => session.id))
+          setSessions((currentSessions) => currentSessions.map((session) => cancelledIds.has(session.id) ? { ...session, status: 'cancelled' } : session))
+        }
+      }
     }
     setSavingStudentRecordId(null)
   }
@@ -590,15 +623,61 @@ function RosterWorkspace({ role, userId, onSignOut }) {
             <p className="eyebrow">{role === 'head_guard' ? 'All students' : 'Assigned roster'}</p>
             <h2 id="roster-heading">Lesson roster</h2>
           </div>
-          <span className="roster-count">{students.length}</span>
+          <span className="roster-count">{visibleStudents.length}</span>
         </div>
-        <label className="search-label" htmlFor="roster-search">Search students</label>
-        <input id="roster-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" title="Filter the roster by student name" />
+        <div className="roster-filters">
+          <div className="filter-field search-field">
+            <label className="search-label" htmlFor="roster-search">Search students</label>
+            <input id="roster-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" title="Filter the roster by student name" />
+          </div>
+          {role === 'head_guard' && (
+            <>
+              <div className="filter-field">
+                <label htmlFor="student-status-filter">Roster</label>
+                <select id="student-status-filter" value={studentStatusFilter} onChange={(event) => setStudentStatusFilter(event.target.value)}>
+                  <option value="active">Active students</option>
+                  <option value="inactive">Inactive students</option>
+                  <option value="all">All students</option>
+                </select>
+              </div>
+              <div className="filter-field">
+                <label htmlFor="instructor-filter">Instructor</label>
+                <select id="instructor-filter" value={instructorFilter} onChange={(event) => setInstructorFilter(event.target.value)}>
+                  <option value="all">All instructors</option>
+                  {instructors.map((instructor) => <option key={instructor.id} value={instructor.id}>{formatStaffName(instructor.full_name)}</option>)}
+                </select>
+              </div>
+              <div className="filter-field">
+                <label htmlFor="time-filter">Lesson time</label>
+                <select id="time-filter" value={timeFilter} onChange={(event) => setTimeFilter(event.target.value)}>
+                  <option value="all">All lesson times</option>
+                  <option value="13:05">1:05 PM</option>
+                  <option value="13:40">1:40 PM</option>
+                </select>
+              </div>
+            </>
+          )}
+        </div>
         {isLoading && <p className="empty-state">Loading roster...</p>}
         {error && <p className="form-error" role="alert">{error}</p>}
         {!isLoading && !error && visibleStudents.length === 0 && <p className="empty-state">No students found.</p>}
         <div className="student-list">
-          {visibleStudents.map((student) => {
+          {(['13:05', '13:40', 'unscheduled']).map((slot) => {
+            const slotStudents = visibleStudents.filter((student) => {
+              const currentSession = getCurrentSession(student.id)
+              const studentSlot = currentSession?.scheduled_time?.slice(0, 5) || 'unscheduled'
+              return studentSlot === slot
+            })
+
+            if (!slotStudents.length) return null
+
+            return (
+              <section className="time-slot-group" key={slot}>
+                <div className="time-slot-heading">
+                  <h3>{slot === '13:05' ? '1:05 PM' : slot === '13:40' ? '1:40 PM' : 'Unscheduled'}</h3>
+                  <span>{slotStudents.length} student{slotStudents.length === 1 ? '' : 's'}</span>
+                </div>
+                {slotStudents.map((student) => {
             const currentSession = getCurrentSession(student.id)
 
             return (
@@ -612,7 +691,7 @@ function RosterWorkspace({ role, userId, onSignOut }) {
                     <span className="student-status">{currentSession ? `${formatStatus(currentSession.status)} · ${formatSession(currentSession)}` : 'No current lesson'}</span>
                   </summary>
 
-                  {role === 'head_guard' && currentSession && currentSession.status === 'scheduled' && (
+                  {role === 'head_guard' && student.active !== false && currentSession && currentSession.status === 'scheduled' && (
                     <div className="attendance-row">
                       <span>Current lesson attendance</span>
                       <button
@@ -626,7 +705,7 @@ function RosterWorkspace({ role, userId, onSignOut }) {
                     </div>
                   )}
 
-                  {role === 'head_guard' && (
+                  {role === 'head_guard' && student.active !== false && (
                     <form className="assignment-form" onSubmit={(event) => handleAssignmentSubmit(event, student.id, currentSession)}>
                       <div className="assignment-heading">
                         <strong>Current lesson assignment</strong>
@@ -675,6 +754,9 @@ function RosterWorkspace({ role, userId, onSignOut }) {
                       </button>
                     </form>
                   )}
+                  {role === 'head_guard' && student.active === false && (
+                    <p className="inactive-student-message">Inactive students cannot be scheduled. Reactivate this student in the permanent record first.</p>
+                  )}
 
                   {role === 'head_guard' && (
                     <details className="student-edit">
@@ -694,6 +776,9 @@ function RosterWorkspace({ role, userId, onSignOut }) {
 
                 </details>
               </div>
+            )
+                })}
+              </section>
             )
           })}
         </div>
