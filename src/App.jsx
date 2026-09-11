@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import csLogo from './assets/cs-logo-navy.png'
 import schoolEagleLogo from './assets/school-eagle-logo.jpeg'
-import swimEagleLogo from './assets/eagle-logo.png(1).png'
-import sunglassesLogo from './assets/sunglasses.png'
-import { SESSION_STATUSES, SWIM_LEVELS, formatStaffName, formatStatus, getStudentName, normalizeInviteCode, sortStaffByLastName } from './lib/app-helpers'
+import { SESSION_STATUSES, SWIM_LEVELS, formatStaffName, formatStatus, getAuthErrorMessage, getStudentName, normalizeInviteCode, sortStaffByLastName } from './lib/app-helpers'
 import './App.css'
 
 function formatSession(session) {
@@ -28,7 +26,14 @@ function formatNoteDate(note) {
   }).format(new Date(note.created_at))
 }
 
-function Notifications({ notifications, studentNames, onMarkRead }) {
+function getNotificationMessage(notification, studentNames) {
+  const studentName = studentNames[notification.session_id]
+  if (notification.type === 'checked_in' && studentName) return `${studentName} checked in for today's lesson.`
+  if ((notification.type === 'cancelled' || notification.type === 'rescheduled') && studentName) return `${studentName}'s lesson was cancelled/rescheduled.`
+  return notification.message || 'There is a new roster update.'
+}
+
+function Notifications({ notifications, studentNames, onMarkRead, onClear }) {
   const unreadCount = notifications.filter((notification) => !notification.is_read).length
 
   return (
@@ -38,10 +43,14 @@ function Notifications({ notifications, studentNames, onMarkRead }) {
         Alerts <span className="notification-count">{unreadCount}</span>
       </summary>
       <div className="notification-list">
-        {notifications.length === 0 && <p className="empty-state">No alerts yet.</p>}
+        <div className="notification-list-header">
+          <strong>Roster alerts</strong>
+          {notifications.length > 0 && <button type="button" onClick={onClear}>Clear all</button>}
+        </div>
+        {notifications.length === 0 && <p className="empty-state">No alerts right now.</p>}
         {notifications.map((notification) => (
           <div className={notification.is_read ? 'notification-item read' : 'notification-item'} key={notification.id}>
-            <p>{notification.type === 'checked_in' && studentNames[notification.session_id] ? `${studentNames[notification.session_id]} has checked in.` : notification.message}</p>
+            <p>{getNotificationMessage(notification, studentNames)}</p>
             <span>{formatNoteDate(notification)}</span>
             {!notification.is_read && <button type="button" onClick={() => onMarkRead(notification.id)}>Mark read</button>}
           </div>
@@ -86,7 +95,7 @@ function InstructorAttendance({ instructors, sessions, userId, onUpdate, savingI
   )
 }
 
-function InvitePanel({ invites, onCreateInvite, onRevokeInvite, isCreating, revokingId }) {
+function InvitePanel({ invites, onCreateInvite, onRevokeInvite, onRemoveInvite, isCreating, revokingId, removingId }) {
   return (
     <section className="invite-panel" aria-labelledby="invite-heading">
       <div className="section-heading">
@@ -95,19 +104,20 @@ function InvitePanel({ invites, onCreateInvite, onRevokeInvite, isCreating, revo
           <h2 id="invite-heading">Invite staff</h2>
         </div>
       </div>
+      <p className="section-subcopy">Create a one-time staff invite. The person receives a code they use to set up their account.</p>
       <form className="invite-form" onSubmit={onCreateInvite}>
         <label>
           Staff email
-          <input name="email" type="email" required placeholder="instructor@school.edu" />
+          <input name="email" type="email" required placeholder="instructor@school.edu" title="Add the staff member's email address" />
         </label>
         <label>
           Role
-          <select name="role" defaultValue="instructor">
+          <select name="role" defaultValue="instructor" title="Choose the staff role tied to this invite">
             <option value="instructor">Instructor</option>
             <option value="head_guard">Head guard</option>
           </select>
         </label>
-        <button type="submit" className="save-assignment" disabled={isCreating}>
+        <button type="submit" className="save-assignment" disabled={isCreating} title="Create and send a new staff invite" >
           {isCreating ? 'Creating...' : 'Create invite'}
         </button>
       </form>
@@ -120,7 +130,9 @@ function InvitePanel({ invites, onCreateInvite, onRevokeInvite, isCreating, revo
             </div>
               <div className="invite-code-actions">
                 <code>{invite.code}</code>
-                {!invite.used && <button type="button" className="revoke-invite" onClick={() => onRevokeInvite(invite)} disabled={revokingId === invite.id}>{revokingId === invite.id ? 'Revoking...' : 'Revoke'}</button>}
+                {invite.used || (invite.expires_at && new Date(invite.expires_at) <= new Date())
+                  ? <button type="button" className="revoke-invite" onClick={() => onRemoveInvite(invite)} disabled={removingId === invite.id} title="Remove this invite from the list">{removingId === invite.id ? 'Removing...' : 'Remove'}</button>
+                  : <button type="button" className="revoke-invite" onClick={() => onRevokeInvite(invite)} disabled={revokingId === invite.id} title="Revoke this unused invite">{revokingId === invite.id ? 'Revoking...' : 'Revoke'}</button>}
               </div>
           </div>
         ))}
@@ -138,19 +150,20 @@ function StudentPanel({ onCreateStudent, isCreating }) {
           <h2 id="student-heading">Add a student</h2>
         </div>
       </div>
+      <p className="section-subcopy">Create the student record before assigning a lesson, level, or instructor.</p>
       <form className="student-form" onSubmit={onCreateStudent}>
         <label>
           Student name
-          <input name="full_name" type="text" required placeholder="Student full name" />
+          <input name="full_name" type="text" required placeholder="Student full name" title="Add the student's full name" />
         </label>
         <label>
           Swim level
-          <select name="swim_level" defaultValue="">
-            <option value="">Select level</option>
+          <select name="swim_level" defaultValue="" title="Choose a level or leave as unknown if the student has not been assessed yet">
+            <option value="">Unknown / not yet assessed</option>
             {SWIM_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}
           </select>
         </label>
-        <button type="submit" className="save-assignment" disabled={isCreating}>
+        <button type="submit" className="save-assignment" disabled={isCreating} title="Create the student profile and save it to the roster">
           {isCreating ? 'Adding...' : 'Add student'}
         </button>
       </form>
@@ -167,6 +180,7 @@ function StaffPanel({ staff, userId, onSetActive, savingId }) {
           <h2 id="staff-heading">Staff access</h2>
         </div>
       </div>
+      <p className="section-subcopy">Deactivate/reactivate staff access. Deactivated staff cannot sign in until reactivated; their existing account and email stay reserved.</p>
       <div className="staff-management-list">
         {sortStaffByLastName(staff).map((member) => (
           <div className="staff-management-row" key={member.id}>
@@ -186,17 +200,16 @@ function RosterWorkspace({ role, userId, onSignOut }) {
   const [sessions, setSessions] = useState([])
   const [instructors, setInstructors] = useState([])
   const [staff, setStaff] = useState([])
-  const [notes, setNotes] = useState([])
   const [notifications, setNotifications] = useState([])
   const [invites, setInvites] = useState([])
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [savingStudentId, setSavingStudentId] = useState(null)
-  const [savingNoteStudentId, setSavingNoteStudentId] = useState(null)
   const [savingAttendanceId, setSavingAttendanceId] = useState(null)
   const [isCreatingInvite, setIsCreatingInvite] = useState(false)
   const [revokingInviteId, setRevokingInviteId] = useState(null)
+  const [removingInviteId, setRemovingInviteId] = useState(null)
   const [isCreatingStudent, setIsCreatingStudent] = useState(false)
   const [savingStudentRecordId, setSavingStudentRecordId] = useState(null)
 
@@ -210,21 +223,19 @@ function RosterWorkspace({ role, userId, onSignOut }) {
           : supabase.from('instructor_students').select('id, full_name, swim_level, active'),
         supabase.from('sessions').select('id, student_id, instructor_id, scheduled_date, scheduled_time, status, student_checked_in_at, student_checked_in_by, instructor_checked_in_at, instructor_checked_in_by'),
         supabase.from('users').select('id, full_name, role, active'),
-        supabase.from('notes').select('id, student_id, author_id, content, created_at').order('created_at', { ascending: false }),
         supabase.from('notifications').select('id, type, message, session_id, is_read, created_at').order('created_at', { ascending: false }),
       ]
       if (role === 'head_guard') results.push(supabase.from('invites').select('id, email, role, code, used, expires_at, created_at').order('created_at', { ascending: false }))
-      const [studentsResult, sessionsResult, staffResult, notesResult, notificationsResult, invitesResult] = await Promise.all(results)
+      const [studentsResult, sessionsResult, staffResult, notificationsResult, invitesResult] = await Promise.all(results)
 
       if (!isActive) return
       setStudents(studentsResult.data || [])
       setSessions(sessionsResult.data || [])
       setStaff(staffResult.data || [])
       setInstructors(sortStaffByLastName((staffResult.data || []).filter((member) => member.active !== false && (member.role === 'instructor' || member.id === userId))))
-      setNotes(notesResult.data || [])
       setNotifications(notificationsResult.data || [])
       setInvites(invitesResult?.data || [])
-      setError(studentsResult.error || sessionsResult.error || staffResult.error || notesResult.error || notificationsResult.error || invitesResult?.error ? 'We could not load the roster.' : '')
+      setError(studentsResult.error || sessionsResult.error || staffResult.error || notificationsResult.error || invitesResult?.error ? 'We could not load the roster.' : '')
       setIsLoading(false)
     }
 
@@ -245,10 +256,18 @@ function RosterWorkspace({ role, userId, onSignOut }) {
   const visibleStudents = students.filter((student) =>
     getStudentName(student).toLowerCase().includes(search.toLowerCase()),
   )
-  const instructorNames = Object.fromEntries(instructors.map((instructor) => [instructor.id, instructor.full_name]))
-  const staffNames = Object.fromEntries(staff.map((member) => [member.id, member.full_name]))
   const sessionsByStudent = Object.groupBy(sessions, (session) => session.student_id)
-  const notesByStudent = Object.groupBy(notes, (note) => note.student_id)
+  const getCurrentSession = (studentId) => {
+    const studentSessions = (sessionsByStudent[studentId] || [])
+      .filter((session) => session.status === 'scheduled')
+      .slice().sort((firstSession, secondSession) => {
+      const firstValue = new Date(`${firstSession.scheduled_date}T${firstSession.scheduled_time || '00:00:00'}`).getTime()
+      const secondValue = new Date(`${secondSession.scheduled_date}T${secondSession.scheduled_time || '00:00:00'}`).getTime()
+      return secondValue - firstValue
+    })
+
+    return studentSessions[0] || null
+  }
   const notificationStudentNames = Object.fromEntries(notifications.map((notification) => {
     const session = sessions.find((currentSession) => currentSession.id === notification.session_id)
     return [notification.session_id, getStudentName(students.find((student) => student.id === session?.student_id) || {})]
@@ -274,39 +293,43 @@ function RosterWorkspace({ role, userId, onSignOut }) {
       status: formData.get('status') || 'scheduled',
     }
 
-    const result = existingSession
-      ? await supabase.from('sessions').update(assignment).eq('id', existingSession.id).select().single()
-      : await supabase.from('sessions').insert(assignment).select().single()
+    const hasScheduleChanged = existingSession && (
+      existingSession.instructor_id !== assignment.instructor_id
+      || existingSession.scheduled_date !== assignment.scheduled_date
+      || existingSession.scheduled_time?.slice(0, 5) !== assignment.scheduled_time
+    )
+
+    let result
+    if (hasScheduleChanged) {
+      result = await supabase.from('sessions').insert(assignment).select().single()
+      if (!result.error) {
+        const { error: historyError } = await supabase
+          .from('sessions')
+          .update({ status: 'cancelled' })
+          .eq('id', existingSession.id)
+
+        if (historyError) {
+          setError('The new lesson was created, but the previous lesson could not be archived.')
+          setSavingStudentId(null)
+          return
+        }
+      }
+    } else {
+      result = existingSession
+        ? await supabase.from('sessions').update(assignment).eq('id', existingSession.id).select().single()
+        : await supabase.from('sessions').insert(assignment).select().single()
+    }
 
     if (result.error) {
       setError('We could not save that assignment. Check the required fields and try again.')
     } else {
-      setSessions((currentSessions) => existingSession
-        ? currentSessions.map((session) => session.id === existingSession.id ? result.data : session)
-        : [...currentSessions, result.data])
+      setSessions((currentSessions) => {
+        if (!existingSession) return [...currentSessions, result.data]
+        if (!hasScheduleChanged) return currentSessions.map((session) => session.id === existingSession.id ? result.data : session)
+        return [...currentSessions.map((session) => session.id === existingSession.id ? { ...session, status: 'cancelled' } : session), result.data]
+      })
     }
     setSavingStudentId(null)
-  }
-
-  async function handleNoteSubmit(event, studentId) {
-    event.preventDefault()
-    setError('')
-    setSavingNoteStudentId(studentId)
-    const form = event.currentTarget
-    const content = new FormData(form).get('content')
-    const { data: note, error: noteError } = await supabase
-      .from('notes')
-      .insert({ student_id: studentId, author_id: userId, content })
-      .select('id, student_id, author_id, content, created_at')
-      .single()
-
-    if (noteError) {
-      setError('We could not save that note. Please try again.')
-    } else {
-      setNotes((currentNotes) => [note, ...currentNotes])
-      form.reset()
-    }
-    setSavingNoteStudentId(null)
   }
 
   async function handleMarkRead(notificationId) {
@@ -322,14 +345,14 @@ function RosterWorkspace({ role, userId, onSignOut }) {
     setNotifications((currentNotifications) => currentNotifications.map((notification) => notification.id === notificationId ? { ...notification, is_read: true } : notification))
   }
 
-  async function handleDeleteNote(noteId) {
+  async function handleClearNotifications() {
     setError('')
-    const { error: deleteError } = await supabase.from('notes').delete().eq('id', noteId)
-    if (deleteError) {
-      setError('We could not delete that note.')
+    const { error: clearError } = await supabase.rpc('clear_my_notifications')
+    if (clearError) {
+      setError('We could not clear the alerts. Please try again.')
       return
     }
-    setNotes((currentNotes) => currentNotes.filter((note) => note.id !== noteId))
+    setNotifications([])
   }
 
   async function handleCreateInvite(event) {
@@ -338,18 +361,47 @@ function RosterWorkspace({ role, userId, onSignOut }) {
     setIsCreatingInvite(true)
     const form = event.currentTarget
     const formData = new FormData(form)
-    const { data: invite, error: inviteError } = await supabase
-      .from('invites')
-      .insert({ email: formData.get('email'), role: formData.get('role'), created_by: userId })
-      .select('id, email, role, code, used, expires_at, created_at')
-      .single()
+    const email = String(formData.get('email') || '').trim().toLowerCase()
+    const role = String(formData.get('role') || 'instructor')
 
-    if (inviteError) {
-      setError('We could not create that invite. The email may already have an active invite.')
-    } else {
+    try {
+      let invite = null
+      if (supabase?.functions) {
+        const { data, error: functionError } = await supabase.functions.invoke('create-invite', {
+          body: { email, role, created_by: userId },
+        })
+
+        if (!functionError && data?.invite) {
+          invite = data.invite
+        } else if (!functionError && data?.message) {
+          setError(data.message)
+        } else if (functionError) {
+          console.warn('Invite function failed; falling back to direct insert.', functionError)
+        }
+      }
+
+      if (!invite) {
+        const { data: directInvite, error: inviteError } = await supabase
+          .from('invites')
+          .insert({ email, role, created_by: userId })
+          .select('id, email, role, code, used, expires_at, created_at')
+          .single()
+
+        if (inviteError) {
+          setError('We could not create that invite. The email may already have an active invite.')
+          setIsCreatingInvite(false)
+          return
+        }
+        invite = directInvite
+      }
+
       setInvites((currentInvites) => [invite, ...currentInvites])
       form.reset()
+    } catch (error) {
+      console.warn('Invite creation failed:', error)
+      setError('We could not create that invite. Please try again.')
     }
+
     setIsCreatingInvite(false)
   }
 
@@ -361,6 +413,26 @@ function RosterWorkspace({ role, userId, onSignOut }) {
     if (revokeError) setError(`We could not revoke that invite: ${revokeError.message}`)
     else setInvites((currentInvites) => currentInvites.filter((currentInvite) => currentInvite.id !== invite.id))
     setRevokingInviteId(null)
+  }
+
+  async function handleRemoveInvite(invite) {
+    const alreadyExpired = invite.expires_at && new Date(invite.expires_at) <= new Date()
+    const confirmText = alreadyExpired || invite.used
+      ? `Remove the invite for ${invite.email} from the list?`
+      : `Remove the invite for ${invite.email}?`
+
+    if (!window.confirm(confirmText)) return
+    setError('')
+    setRemovingInviteId(invite.id)
+
+    const { error: deleteError } = await supabase.rpc('remove_invite', { p_invite_id: invite.id })
+
+    if (deleteError) {
+      setError(`We could not remove that invite: ${deleteError.message}`)
+    } else {
+      setInvites((currentInvites) => currentInvites.filter((currentInvite) => currentInvite.id !== invite.id))
+    }
+    setRemovingInviteId(null)
   }
 
   async function handleSetStaffActive(member, active) {
@@ -440,7 +512,6 @@ function RosterWorkspace({ role, userId, onSignOut }) {
     } else {
       setStudents((currentStudents) => currentStudents.filter((currentStudent) => currentStudent.id !== student.id))
       setSessions((currentSessions) => currentSessions.filter((session) => session.student_id !== student.id))
-      setNotes((currentNotes) => currentNotes.filter((note) => note.student_id !== student.id))
     }
     setSavingStudentRecordId(null)
   }
@@ -501,10 +572,15 @@ function RosterWorkspace({ role, userId, onSignOut }) {
           <div>
             <p className="eyebrow">Carl Sandburg Swim Guard</p>
             <h1>{role === 'head_guard' ? 'Roster desk' : 'Your students'}</h1>
+            <p className="workspace-helper">
+              {role === 'head_guard'
+                ? 'Head guard tools: manage the roster, assignments, staff access, and invitation codes.'
+                : 'Instructor dashboard: review assigned students and mark attendance.'}
+            </p>
           </div>
         </div>
         <div className="header-actions">
-          <Notifications notifications={notifications} studentNames={notificationStudentNames} onMarkRead={handleMarkRead} />
+          <Notifications notifications={notifications} studentNames={notificationStudentNames} onMarkRead={handleMarkRead} onClear={handleClearNotifications} />
           <button type="button" className="text-button" onClick={onSignOut}>Sign out</button>
         </div>
       </header>
@@ -517,107 +593,115 @@ function RosterWorkspace({ role, userId, onSignOut }) {
           <span className="roster-count">{students.length}</span>
         </div>
         <label className="search-label" htmlFor="roster-search">Search students</label>
-        <input id="roster-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" />
+        <input id="roster-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" title="Filter the roster by student name" />
         {isLoading && <p className="empty-state">Loading roster...</p>}
         {error && <p className="form-error" role="alert">{error}</p>}
         {!isLoading && !error && visibleStudents.length === 0 && <p className="empty-state">No students found.</p>}
         <div className="student-list">
-          {visibleStudents.map((student) => (
-            <div className="student-entry" key={student.id}>
-              <details className="student-record">
-                <summary className="student-row">
-                <div>
-                  <h3>{getStudentName(student)}</h3>
-                  <p>{student.swim_level || 'Level not recorded'} · {formatSession(sessionsByStudent[student.id]?.[0])}</p>
-                </div>
-                <span className="student-status">{instructorNames[sessionsByStudent[student.id]?.[0]?.instructor_id] || (student.active ? 'Unassigned' : 'Inactive')} · {formatStatus(sessionsByStudent[student.id]?.[0]?.status)}</span>
-                </summary>
-              {role === 'head_guard' && sessionsByStudent[student.id]?.[0] && (
-                <div className="attendance-row">
-                  <span>Student attendance</span>
-                  <button
-                    type="button"
-                    className={sessionsByStudent[student.id][0].student_checked_in_at ? 'attendance-button checked' : 'attendance-button'}
-                    onClick={() => handleAttendance(sessionsByStudent[student.id][0].id, 'student_checked_in_at')}
-                    disabled={Boolean(sessionsByStudent[student.id][0].student_checked_in_at) || savingAttendanceId === sessionsByStudent[student.id][0].id}
-                  >
-                    {sessionsByStudent[student.id][0].student_checked_in_at ? 'Checked in' : 'Check in'}
-                  </button>
-                </div>
-              )}
-              {role === 'head_guard' && (
-                <form className="assignment-form" onSubmit={(event) => handleAssignmentSubmit(event, student.id, sessionsByStudent[student.id]?.[0])}>
-                  <label>
-                    Instructor
-                    <select name="instructor_id" defaultValue={sessionsByStudent[student.id]?.[0]?.instructor_id || ''} required>
-                      <option value="">Choose instructor</option>
-                      {instructors.map((instructor) => <option key={instructor.id} value={instructor.id}>{formatStaffName(instructor.full_name)}{instructor.id === userId ? ' (you)' : ''}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    Date
-                    <input name="scheduled_date" type="date" defaultValue={sessionsByStudent[student.id]?.[0]?.scheduled_date || ''} required />
-                  </label>
-                  <label>
-                    Time
-                    <select name="scheduled_time" defaultValue={sessionsByStudent[student.id]?.[0]?.scheduled_time?.slice(0, 5) || ''} required>
-                      <option value="">Choose time</option>
-                      <option value="13:05">1:05 PM</option>
-                      <option value="13:40">1:40 PM</option>
-                    </select>
-                  </label>
-                  <label>
-                    Status
-                    <select name="status" defaultValue={sessionsByStudent[student.id]?.[0]?.status || 'scheduled'}>
-                      {SESSION_STATUSES.map((status) => <option key={status} value={status}>{formatStatus(status)}</option>)}
-                    </select>
-                  </label>
-                  <button type="submit" className="save-assignment" disabled={savingStudentId === student.id}>
-                    {savingStudentId === student.id ? 'Saving...' : sessionsByStudent[student.id]?.[0] ? 'Update' : 'Assign'}
-                  </button>
-                </form>
-              )}
-              {role === 'head_guard' && (
-                <details className="student-edit">
-                  <summary>Edit student record</summary>
-                  <form onSubmit={(event) => handleStudentUpdate(event, student.id)}>
-                    <label>Student name<input name="full_name" defaultValue={student.full_name} required /></label>
-                    <label>Swim level<select name="swim_level" defaultValue={student.swim_level || ''}><option value="">Select level</option>{SWIM_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></label>
-                    <label>Parent/guardian name<input name="parent_name" defaultValue={student.parent_name || ''} /></label>
-                    <label>Parent/guardian contact<input name="parent_contact" defaultValue={student.parent_contact || ''} /></label>
-                    <label className="wide-field">Special information<textarea name="special_info" rows="2" defaultValue={student.special_info || ''} /></label>
-                    <label className="active-toggle"><input name="active" type="checkbox" defaultChecked={student.active !== false} /> Active student</label>
-                    <button type="submit" className="save-assignment" disabled={savingStudentRecordId === student.id}>{savingStudentRecordId === student.id ? 'Saving...' : 'Save student'}</button>
-                    <button type="button" className="delete-student" onClick={() => handleDeleteStudent(student)} disabled={savingStudentRecordId === student.id}>Remove student</button>
-                  </form>
+          {visibleStudents.map((student) => {
+            const currentSession = getCurrentSession(student.id)
+
+            return (
+              <div className="student-entry" key={student.id}>
+                <details className="student-record">
+                  <summary className="student-row">
+                    <div>
+                      <h3>{getStudentName(student)}</h3>
+                      <p><span className="record-label">Student record</span> {student.swim_level || 'Unknown / not yet assessed'}</p>
+                    </div>
+                    <span className="student-status">{currentSession ? `${formatStatus(currentSession.status)} · ${formatSession(currentSession)}` : 'No current lesson'}</span>
+                  </summary>
+
+                  {role === 'head_guard' && currentSession && currentSession.status === 'scheduled' && (
+                    <div className="attendance-row">
+                      <span>Current lesson attendance</span>
+                      <button
+                        type="button"
+                        className={currentSession.student_checked_in_at ? 'attendance-button checked' : 'attendance-button'}
+                        onClick={() => handleAttendance(currentSession.id, 'student_checked_in_at')}
+                        disabled={Boolean(currentSession.student_checked_in_at) || savingAttendanceId === currentSession.id}
+                      >
+                        {currentSession.student_checked_in_at ? 'Checked in' : 'Check in'}
+                      </button>
+                    </div>
+                  )}
+
+                  {role === 'head_guard' && (
+                    <form className="assignment-form" onSubmit={(event) => handleAssignmentSubmit(event, student.id, currentSession)}>
+                      <div className="assignment-heading">
+                        <strong>Current lesson assignment</strong>
+                        <span>{currentSession ? 'Change the date or time to create a fresh lesson and reset attendance.' : 'This temporary assignment can be changed without changing the student record.'}</span>
+                      </div>
+                      <label>
+                        Instructor
+                        <select name="instructor_id" defaultValue={currentSession?.instructor_id || ''} required>
+                          <option value="">Choose instructor</option>
+                          {instructors.map((instructor) => (
+                            <option key={instructor.id} value={instructor.id}>
+                              {formatStaffName(instructor.full_name)}{instructor.id === userId ? ' (you)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Date
+                        <input name="scheduled_date" type="date" defaultValue={currentSession?.scheduled_date || ''} required />
+                      </label>
+                      <label>
+                        Time
+                        <select name="scheduled_time" defaultValue={currentSession?.scheduled_time?.slice(0, 5) || ''} required>
+                          <option value="">Choose time</option>
+                          <option value="13:05">1:05 PM</option>
+                          <option value="13:40">1:40 PM</option>
+                        </select>
+                      </label>
+                      <label>
+                        Status
+                        <select name="status" defaultValue={currentSession?.status || 'scheduled'}>
+                          {SESSION_STATUSES.map((status) => (
+                            <option key={status} value={status}>{formatStatus(status)}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="submit"
+                        className="save-assignment"
+                        disabled={savingStudentId === student.id}
+                        title={currentSession
+                          ? "Update the student's current lesson assignment"
+                          : 'Assign a student to an instructor and lesson slot'}
+                      >
+                        {savingStudentId === student.id ? 'Saving...' : currentSession ? 'Update' : 'Assign'}
+                      </button>
+                    </form>
+                  )}
+
+                  {role === 'head_guard' && (
+                    <details className="student-edit">
+                      <summary>Permanent student record</summary>
+                      <form onSubmit={(event) => handleStudentUpdate(event, student.id)}>
+                        <label>Student name<input name="full_name" defaultValue={student.full_name} required /></label>
+                        <label>Swim level<select name="swim_level" defaultValue={student.swim_level || ''} title="Use Unknown if the student has not been assessed yet"><option value="">Unknown / not yet assessed</option>{SWIM_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></label>
+                        <label>Parent/guardian name<input name="parent_name" defaultValue={student.parent_name || ''} /></label>
+                        <label>Parent/guardian contact<input name="parent_contact" defaultValue={student.parent_contact || ''} /></label>
+                        <label className="wide-field">Special information<textarea name="special_info" rows="2" defaultValue={student.special_info || ''} /></label>
+                        <label className="active-toggle"><input name="active" type="checkbox" defaultChecked={student.active !== false} /> Active student</label>
+                        <button type="submit" className="save-assignment" disabled={savingStudentRecordId === student.id}>{savingStudentRecordId === student.id ? 'Saving...' : 'Save student'}</button>
+                        <button type="button" className="delete-student" onClick={() => handleDeleteStudent(student)} disabled={savingStudentRecordId === student.id}>Remove student</button>
+                      </form>
+                    </details>
+                  )}
+
                 </details>
-              )}
-              <div className="notes-panel">
-                <p className="notes-heading">Notes</p>
-                {(notesByStudent[student.id] || []).map((note) => (
-                  <div className="note-item" key={note.id}>
-                    <p>{note.content}</p>
-                    <span>{staffNames[note.author_id] || 'Staff member'} · {formatNoteDate(note)}</span>
-                    {(role === 'head_guard' || note.author_id === userId) && <button type="button" onClick={() => handleDeleteNote(note.id)}>Delete note</button>}
-                  </div>
-                ))}
-                <form className="note-form" onSubmit={(event) => handleNoteSubmit(event, student.id)}>
-                  <label htmlFor={`note-${student.id}`}>Add a note</label>
-                  <textarea id={`note-${student.id}`} name="content" rows="2" required placeholder="Record a lesson update..." />
-                  <button type="submit" className="save-assignment" disabled={savingNoteStudentId === student.id}>
-                    {savingNoteStudentId === student.id ? 'Saving...' : 'Add note'}
-                  </button>
-                </form>
               </div>
-              </details>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </section>
       {role === 'head_guard' && <InstructorAttendance instructors={instructors} sessions={sessions} userId={userId} onUpdate={handleInstructorAttendance} savingId={savingAttendanceId} />}
       {role === 'head_guard' && <StudentPanel onCreateStudent={handleCreateStudent} isCreating={isCreatingStudent} />}
       {role === 'head_guard' && <StaffPanel staff={staff} userId={userId} onSetActive={handleSetStaffActive} savingId={savingStudentRecordId} />}
-      {role === 'head_guard' && <InvitePanel invites={invites} onCreateInvite={handleCreateInvite} onRevokeInvite={handleRevokeInvite} isCreating={isCreatingInvite} revokingId={revokingInviteId} />}
+      {role === 'head_guard' && <InvitePanel invites={invites} onCreateInvite={handleCreateInvite} onRevokeInvite={handleRevokeInvite} onRemoveInvite={handleRemoveInvite} isCreating={isCreatingInvite} revokingId={revokingInviteId} removingId={removingInviteId} />}
     </main>
   )
 }
@@ -719,8 +803,17 @@ function App() {
       authError = signInError
     }
 
-    if (authError) setError(authMode === 'signup' ? 'We could not create your account. Check your details and try again.' : 'We could not sign you in. Check your email and password.')
-    if (!authError && authMode === 'signup' && !createdSession) setNotice('Account created. Check your email to confirm your account, then sign in.')
+    if (authError) {
+      setError(getAuthErrorMessage(authError, authMode))
+    }
+
+    if (!authError && authMode === 'signup') {
+      if (createdSession) {
+        setNotice('Account created. You are signed in.')
+      } else {
+        setNotice('Account created. Check your email to confirm your account, then sign in.')
+      }
+    }
     setIsSigningIn(false)
   }
 
@@ -818,12 +911,6 @@ function App() {
         </button>
         <p className="invite-note">Accounts are created by invitation only.</p>
       </section>
-      <div className="mascot-sticky trunks-sticky" aria-hidden="true">
-        <img src={swimEagleLogo} alt="" />
-      </div>
-      <div className="mascot-sticky sunglasses-sticky" aria-hidden="true">
-        <img src={sunglassesLogo} alt="" />
-      </div>
     </main>
   )
 }

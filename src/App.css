@@ -64,60 +64,6 @@ textarea {
   box-shadow: 0 8px 22px rgba(16, 47, 75, 0.1);
 }
 
-.mascot-sticky {
-  position: absolute;
-  z-index: 0;
-  isolation: isolate;
-  display: grid;
-  place-items: center;
-  padding: 12px;
-  background: var(--gold-soft);
-  border: 1px solid #d7bc58;
-  border-radius: 3px;
-  box-shadow: 7px 9px 0 rgba(16, 47, 75, 0.13);
-}
-
-.mascot-sticky::before {
-  content: '';
-  position: absolute;
-  z-index: 1;
-  top: -9px;
-  left: 50%;
-  width: 58px;
-  height: 18px;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(16, 47, 75, 0.12);
-  transform: translateX(-50%) rotate(-3deg);
-}
-
-.mascot-sticky img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.trunks-sticky img {
-  mix-blend-mode: multiply;
-  clip-path: inset(0 0 8px 0);
-}
-
-.trunks-sticky {
-  right: max(4vw, 30px);
-  bottom: 8vh;
-  width: 170px;
-  height: 150px;
-  transform: rotate(6deg);
-}
-
-.sunglasses-sticky {
-  top: 7vh;
-  left: max(2vw, 24px);
-  width: 148px;
-  height: 118px;
-  transform: rotate(-6deg);
-}
-
 .eyebrow {
   margin: 0 0 9px;
   color: var(--blue);
@@ -140,6 +86,13 @@ h1 {
   color: var(--muted);
   font-size: 16px;
   line-height: 1.5;
+}
+
+.workspace-helper,
+.section-subcopy {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font: 12px/1.5 Arial, sans-serif;
 }
 
 form {
@@ -322,6 +275,11 @@ code {
   font-size: 54px;
 }
 
+.workspace-helper {
+  max-width: 520px;
+  margin-top: 6px;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -410,6 +368,25 @@ code {
   box-shadow: 0 15px 30px rgba(16, 47, 75, 0.15);
 }
 
+.notification-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 10px 9px;
+  color: var(--navy);
+  font: 700 12px/1.2 Arial, sans-serif;
+}
+
+.notification-list-header button {
+  padding: 0;
+  color: var(--danger);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: 700 11px/1.2 Arial, sans-serif;
+}
+
 .notification-item {
   padding: 10px;
   border-bottom: 1px solid var(--line);
@@ -444,8 +421,7 @@ code {
 
 .notification-item button,
 .revoke-invite,
-.student-edit .delete-student,
-.note-item button {
+.student-edit .delete-student {
   margin-top: 7px;
   padding: 0;
   color: var(--danger);
@@ -569,6 +545,12 @@ code {
   font: 12px/1.4 Arial, sans-serif;
 }
 
+.record-label {
+  margin-right: 5px;
+  color: var(--blue);
+  font-weight: 700;
+}
+
 .student-status {
   color: var(--success);
   text-align: right;
@@ -626,6 +608,23 @@ code {
   background: var(--paper);
 }
 
+.assignment-heading {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 3px;
+  padding-bottom: 2px;
+}
+
+.assignment-heading strong {
+  color: var(--navy);
+  font: 700 12px/1.2 Arial, sans-serif;
+}
+
+.assignment-heading span {
+  color: var(--muted);
+  font: 11px/1.35 Arial, sans-serif;
+}
+
 .assignment-form label,
 .student-edit form label,
 .student-form label,
@@ -654,52 +653,6 @@ code {
   transition: background 150ms ease, transform 150ms ease;
 }
 
-.notes-panel {
-  padding: 0 17px 17px;
-  background: var(--paper);
-}
-
-.notes-heading {
-  margin: 0 0 9px;
-  color: var(--blue);
-  font: 700 10px/1.2 Arial, sans-serif;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
-.note-item {
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  background: var(--gold-soft);
-  border-left: 3px solid var(--gold);
-  border-radius: 0 5px 5px 0;
-}
-
-.note-item p {
-  margin: 0 0 5px;
-  color: var(--ink);
-  font: 13px/1.4 Arial, sans-serif;
-}
-
-.note-item span {
-  color: var(--muted);
-  font: 11px/1.2 Arial, sans-serif;
-}
-
-.note-form {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: end;
-  margin-top: 12px;
-}
-
-.note-form label {
-  grid-column: 1 / -1;
-  margin: 0;
-}
-
-.note-form textarea,
 .student-edit textarea {
   min-width: 0;
   padding: 10px;
@@ -862,22 +815,6 @@ code {
     font-size: 40px;
   }
 
-  .sunglasses-sticky {
-    top: 12px;
-    left: -30px;
-    width: 108px;
-    height: 86px;
-    opacity: 0.85;
-  }
-
-  .trunks-sticky {
-    right: -20px;
-    bottom: 3vh;
-    width: 120px;
-    height: 106px;
-    opacity: 0.85;
-  }
-
   .workspace-shell {
     padding: 26px 14px 46px;
   }
@@ -910,6 +847,11 @@ code {
   .header-actions {
     width: 100%;
     justify-content: space-between;
+    padding: 4px 0 0;
+  }
+
+  .notifications summary {
+    min-height: 40px;
   }
 
   .roster-section,
@@ -930,13 +872,12 @@ code {
     grid-template-columns: 1fr 1fr;
   }
 
-  .assignment-form label:first-child,
-  .student-form label:first-child,
-  .invite-form label:first-child {
-    grid-column: 1 / -1;
+  .assignment-form {
+    grid-template-columns: 1fr;
   }
 
-  .assignment-form label:nth-child(4) {
+  .student-form label:first-child,
+  .invite-form label:first-child {
     grid-column: 1 / -1;
   }
 
@@ -961,14 +902,6 @@ code {
 
   .student-edit .delete-student {
     justify-self: start;
-  }
-
-  .note-form {
-    grid-template-columns: 1fr;
-  }
-
-  .note-form .save-assignment {
-    width: 100%;
   }
 
   .staff-row {

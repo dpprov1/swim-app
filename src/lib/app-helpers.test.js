@@ -4,6 +4,7 @@ import {
   SWIM_LEVELS,
   formatStatus,
   formatStaffName,
+  getAuthErrorMessage,
   getStudentName,
   normalizeInviteCode,
   sortStaffByLastName,
@@ -17,11 +18,11 @@ describe('swim level contract', () => {
 
 describe('session status contract', () => {
   it('contains only statuses supported by the database', () => {
-    expect(SESSION_STATUSES).toEqual(['scheduled', 'rescheduled', 'completed', 'cancelled'])
+    expect(SESSION_STATUSES).toEqual(['scheduled', 'cancelled'])
   })
 
   it('formats a status for display', () => {
-    expect(formatStatus('rescheduled')).toBe('rescheduled')
+    expect(formatStatus('cancelled')).toBe('cancelled')
     expect(formatStatus()).toBe('Unscheduled')
   })
 })
@@ -34,6 +35,11 @@ describe('roster helpers', () => {
 
   it('normalizes invite codes before redemption', () => {
     expect(normalizeInviteCode('  ab12cd ')).toBe('AB12CD')
+  })
+
+  it('explains confirmation-required signup errors clearly', () => {
+    expect(getAuthErrorMessage({ message: 'Email not confirmed' }, 'signup')).toBe('Check your email to confirm the account, then sign in.')
+    expect(getAuthErrorMessage({ message: 'User already registered' }, 'signup')).toBe('An account already exists for that email.')
   })
 
   it('formats and sorts staff by last name', () => {
