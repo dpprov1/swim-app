@@ -43,6 +43,7 @@ begin
     into invite_id, invite_role
   from public.invites
   where lower(email) = lower(trim(new.email))
+    and upper(code) = upper(trim(coalesce(new.raw_user_meta_data->>'invite_code', '')))
     and used = false
     and expires_at > now()
   order by created_at desc
