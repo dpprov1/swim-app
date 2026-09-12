@@ -1,5 +1,14 @@
 -- Validate invite codes before signup without consuming them. The auth trigger
 -- redeems the matching invite when the account is actually created.
+alter table public.users
+  add column if not exists full_name text,
+  add column if not exists role text default 'instructor',
+  add column if not exists active boolean not null default true;
+
+alter table public.users
+  alter column role set default 'instructor',
+  alter column active set default true;
+
 create or replace function public.check_invite(p_email text, p_code text)
 returns text
 language plpgsql
@@ -75,3 +84,8 @@ end;
 $$;
 
 -- The trigger function runs as the database owner and does not need a client grant.
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row
+execute function public.handle_new_user();
