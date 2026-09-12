@@ -195,6 +195,23 @@ function StaffPanel({ staff, userId, onSetActive, savingId }) {
   )
 }
 
+function AccountPanel({ onDeleteAccount, isDeleting }) {
+  return (
+    <section className="account-panel" aria-labelledby="account-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Account settings</p>
+          <h2 id="account-heading">Delete account</h2>
+        </div>
+      </div>
+      <p className="section-subcopy">Permanently remove this instructor account, its lesson assignments, and its access. The email can then be invited again.</p>
+      <button type="button" className="delete-account-button" onClick={onDeleteAccount} disabled={isDeleting}>
+        {isDeleting ? 'Deleting account...' : 'Delete my account'}
+      </button>
+    </section>
+  )
+}
+
 function RosterWorkspace({ role, userId, onSignOut }) {
   const [students, setStudents] = useState([])
   const [sessions, setSessions] = useState([])
@@ -215,6 +232,7 @@ function RosterWorkspace({ role, userId, onSignOut }) {
   const [removingInviteId, setRemovingInviteId] = useState(null)
   const [isCreatingStudent, setIsCreatingStudent] = useState(false)
   const [savingStudentRecordId, setSavingStudentRecordId] = useState(null)
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
 
   useEffect(() => {
     let isActive = true
@@ -446,6 +464,19 @@ function RosterWorkspace({ role, userId, onSignOut }) {
       setInstructors((currentInstructors) => sortStaffByLastName(currentInstructors.filter((currentMember) => currentMember.id !== member.id || active)))
     }
     setSavingStudentRecordId(null)
+  }
+
+  async function handleDeleteAccount() {
+    if (!window.confirm('Delete your instructor account and lesson assignments? This cannot be undone.')) return
+    setError('')
+    setIsDeletingAccount(true)
+    const { error: deleteError } = await supabase.functions.invoke('delete-account')
+    if (deleteError) {
+      setError('We could not delete the account. The account deletion function must be deployed first.')
+      setIsDeletingAccount(false)
+      return
+    }
+    await onSignOut()
   }
 
   async function handleCreateStudent(event) {
@@ -769,6 +800,7 @@ function RosterWorkspace({ role, userId, onSignOut }) {
       {role === 'head_guard' && <StudentPanel onCreateStudent={handleCreateStudent} isCreating={isCreatingStudent} />}
       {role === 'head_guard' && <StaffPanel staff={staff} userId={userId} onSetActive={handleSetStaffActive} savingId={savingStudentRecordId} />}
       {role === 'head_guard' && <InvitePanel invites={invites} onCreateInvite={handleCreateInvite} onRevokeInvite={handleRevokeInvite} onRemoveInvite={handleRemoveInvite} isCreating={isCreatingInvite} revokingId={revokingInviteId} removingId={removingInviteId} />}
+      {role === 'instructor' && <AccountPanel onDeleteAccount={handleDeleteAccount} isDeleting={isDeletingAccount} />}
     </main>
   )
 }
@@ -788,6 +820,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(() => Boolean(supabase))
   const [isProfileLoading, setIsProfileLoading] = useState(false)
   const [isSigningIn, setIsSigningIn] = useState(false)
+  const [isSendingReset, setIsSendingReset] = useState(false)
+  const [isRecovery, setIsRecovery] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
 
   useEffect(() => {
     if (!supabase) return undefined
@@ -825,7 +860,10 @@ function App() {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, nextSession) => syncSession(nextSession),
+      (event, nextSession) => {
+        if (event === 'PASSWORD_RECOVERY') setIsRecovery(true)
+        syncSession(nextSession)
+      },
     )
 
     return () => {
@@ -891,6 +929,45 @@ function App() {
     await supabase.auth.signOut()
   }
 
+  async function handleForgotPassword() {
+    if (!email.trim()) {
+      setError('Enter your account email first.')
+      return
+    }
+
+    setError('')
+    setNotice('')
+    setIsSendingReset(true)
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: window.location.origin,
+    })
+
+    if (resetError) setError('We could not send the password reset email. Check the email and try again.')
+    else setNotice('Check your email for a password reset link.')
+    setIsSendingReset(false)
+  }
+
+  async function handlePasswordUpdate(event) {
+    event.preventDefault()
+    setError('')
+    setNotice('')
+    if (newPassword.length < 6) {
+      setError('Use a password with at least 6 characters.')
+      return
+    }
+
+    setIsSigningIn(true)
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+    if (updateError) {
+      setError('We could not update your password. Please request a new reset email.')
+    } else {
+      setIsRecovery(false)
+      setNewPassword('')
+      setNotice('Password updated. You are signed in.')
+    }
+    setIsSigningIn(false)
+  }
+
   if (isLoading) return <main className="auth-shell"><p>Loading Swim Club...</p></main>
 
   if (session && (isProfileLoading || isLoading)) {
@@ -907,6 +984,24 @@ function App() {
           <button type="button" className="text-button" onClick={handleSignOut}>
             Sign out
           </button>
+        </section>
+      </main>
+    )
+  }
+
+  if (session && isRecovery) {
+    return (
+      <main className="auth-shell">
+        <section className="welcome-panel" aria-labelledby="reset-heading">
+          <p className="eyebrow">Carl Sandburg Swim Guard</p>
+          <h1 id="reset-heading">Choose a new password.</h1>
+          <p className="panel-copy">Set a new password for your staff account.</p>
+          <form onSubmit={handlePasswordUpdate}>
+            <label htmlFor="new-password">New password</label>
+            <input id="new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength="6" required />
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <button type="submit" className="submit-button" disabled={isSigningIn}>{isSigningIn ? 'Saving...' : 'Update password'}</button>
+          </form>
         </section>
       </main>
     )
@@ -965,9 +1060,14 @@ function App() {
           <input id="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
           <div className="password-label-row">
             <label htmlFor="password">Password</label>
-            <button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-pressed={showPassword}>
-              {showPassword ? 'Hide password' : 'Show password'}
-            </button>
+            <div className="password-actions">
+              <button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-pressed={showPassword}>
+                {showPassword ? 'Hide password' : 'Show password'}
+              </button>
+              {authMode === 'login' && <button type="button" className="password-toggle" onClick={handleForgotPassword} disabled={isSendingReset}>
+                {isSendingReset ? 'Sending...' : 'Forgot password?'}
+              </button>}
+            </div>
           </div>
           <input id="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
           {error && <p className="form-error" role="alert">{error}</p>}

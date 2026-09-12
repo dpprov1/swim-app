@@ -114,6 +114,13 @@ label {
   margin-top: 9px;
 }
 
+.password-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
 .password-label-row label {
   margin-top: 0;
 }
@@ -224,7 +231,8 @@ code {
 .invite-panel,
 .attendance-panel,
 .student-panel,
-.staff-management {
+.staff-management,
+.account-panel {
   width: min(100%, 950px);
   margin-right: auto;
   margin-left: auto;
@@ -811,6 +819,26 @@ code {
   border-top: 4px solid var(--blue);
 }
 
+.account-panel {
+  border-top: 4px solid var(--danger);
+}
+
+.delete-account-button {
+  min-height: 38px;
+  padding: 0 14px;
+  color: #ffffff;
+  background: var(--danger);
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  font: 700 11px/1 Arial, sans-serif;
+}
+
+.delete-account-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .student-form,
 .invite-form {
   display: grid;
@@ -913,7 +941,8 @@ code {
   .invite-panel,
   .attendance-panel,
   .student-panel,
-  .staff-management {
+  .staff-management,
+  .account-panel {
     padding: 20px 15px;
   }
 
