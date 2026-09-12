@@ -55,5 +55,6 @@ http://localhost:5173/
 3. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as Vercel environment variables for Preview and Production.
 4. Deploy. `vercel.json` supplies the Vite build and output settings.
 5. Add the deployed Vercel URL to Supabase Auth redirect URLs.
+6. Set the Supabase Auth Site URL to the deployed Vercel URL. The app uses the current site origin for confirmation links, so production links return to Vercel and local development links return locally.
 
 The app includes a manifest and service worker for installability. Offline mode preserves the app shell, while authentication and live Supabase data require a network connection.

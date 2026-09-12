@@ -858,7 +858,10 @@ function App() {
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
-        options: { data: { full_name: fullName.trim(), role: inviteRole, invite_code: normalizeInviteCode(inviteCode) } },
+        options: {
+          data: { full_name: fullName.trim(), role: inviteRole, invite_code: normalizeInviteCode(inviteCode) },
+          emailRedirectTo: window.location.origin,
+        },
       })
       authError = signUpError
       createdSession = signUpData.session
