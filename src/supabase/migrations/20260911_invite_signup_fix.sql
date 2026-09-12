@@ -54,7 +54,7 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', ''),
-    coalesce(invite_role, 'instructor'),
+    coalesce(new.raw_user_meta_data->>'role', invite_role, 'instructor'),
     true
   )
   on conflict (id) do update set

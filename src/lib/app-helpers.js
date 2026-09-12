@@ -47,6 +47,14 @@ export function getAuthErrorMessage(error, mode = 'login') {
     return 'We could not sign you in. Check your email and password.'
   }
 
+  if (message.includes('database error saving new user') || message.includes('error saving new user')) {
+    return 'Supabase could not finish creating the staff profile. Run the latest invite signup SQL migration, then try a fresh invite.'
+  }
+
+  if (message.includes('password') && (message.includes('weak') || message.includes('short') || message.includes('length'))) {
+    return 'Use a stronger password with at least 6 characters.'
+  }
+
   if (message.includes('invite') || message.includes('code')) {
     return 'That invite code is invalid or expired.'
   }
