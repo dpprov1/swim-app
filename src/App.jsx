@@ -383,17 +383,19 @@ function RosterWorkspace({ role, userId, onSignOut }) {
     const role = String(formData.get('role') || 'instructor')
 
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('create-invite', {
-        body: { email, role, created_by: userId },
-      })
+      const { data: invite, error: inviteError } = await supabase
+        .from('invites')
+        .insert({ email, role, created_by: userId })
+        .select('id, email, role, code, used, expires_at, created_at')
+        .single()
 
-      if (functionError || !data?.invite) {
-        setError(data?.message || 'We could not send that invite. Check the email service configuration.')
+      if (inviteError) {
+        setError('We could not create that invite. The email may already have an active invite.')
         setIsCreatingInvite(false)
         return
       }
 
-      setInvites((currentInvites) => [data.invite, ...currentInvites])
+      setInvites((currentInvites) => [invite, ...currentInvites])
       form.reset()
     } catch (error) {
       console.warn('Invite creation failed:', error)
