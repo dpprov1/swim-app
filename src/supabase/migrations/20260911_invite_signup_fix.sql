@@ -9,6 +9,26 @@ alter table public.users
   alter column role set default 'instructor',
   alter column active set default true;
 
+alter table public.invites enable row level security;
+
+drop policy if exists "head_guards_can_view_invites" on public.invites;
+create policy "head_guards_can_view_invites" on public.invites
+  for select using (
+    exists (
+      select 1 from public.users
+      where id = auth.uid() and role = 'head_guard' and active = true
+    )
+  );
+
+drop policy if exists "head_guards_can_create_invites" on public.invites;
+create policy "head_guards_can_create_invites" on public.invites
+  for insert with check (
+    exists (
+      select 1 from public.users
+      where id = auth.uid() and role = 'head_guard' and active = true
+    )
+  );
+
 create or replace function public.check_invite(p_email text, p_code text)
 returns text
 language plpgsql
