@@ -383,37 +383,17 @@ function RosterWorkspace({ role, userId, onSignOut }) {
     const role = String(formData.get('role') || 'instructor')
 
     try {
-      let invite = null
-      if (supabase?.functions) {
-        const { data, error: functionError } = await supabase.functions.invoke('create-invite', {
-          body: { email, role, created_by: userId },
-        })
+      const { data, error: functionError } = await supabase.functions.invoke('create-invite', {
+        body: { email, role, created_by: userId },
+      })
 
-        if (!functionError && data?.invite) {
-          invite = data.invite
-        } else if (!functionError && data?.message) {
-          setError(data.message)
-        } else if (functionError) {
-          console.warn('Invite function failed; falling back to direct insert.', functionError)
-        }
+      if (functionError || !data?.invite) {
+        setError(data?.message || 'We could not send that invite. Check the email service configuration.')
+        setIsCreatingInvite(false)
+        return
       }
 
-      if (!invite) {
-        const { data: directInvite, error: inviteError } = await supabase
-          .from('invites')
-          .insert({ email, role, created_by: userId })
-          .select('id, email, role, code, used, expires_at, created_at')
-          .single()
-
-        if (inviteError) {
-          setError('We could not create that invite. The email may already have an active invite.')
-          setIsCreatingInvite(false)
-          return
-        }
-        invite = directInvite
-      }
-
-      setInvites((currentInvites) => [invite, ...currentInvites])
+      setInvites((currentInvites) => [data.invite, ...currentInvites])
       form.reset()
     } catch (error) {
       console.warn('Invite creation failed:', error)
@@ -862,7 +842,7 @@ function App() {
     let createdSession
 
     if (authMode === 'signup') {
-      const { data: inviteRole, error: inviteError } = await supabase.rpc('redeem_invite', {
+      const { data: inviteRole, error: inviteError } = await supabase.rpc('check_invite', {
         p_email: email.trim().toLowerCase(),
         p_code: normalizeInviteCode(inviteCode),
       })
