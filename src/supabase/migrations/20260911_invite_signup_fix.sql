@@ -45,25 +45,14 @@ security definer
 set search_path = public
 as $$
 declare
-  invite_role text;
-  invite_id uuid;
+  invite_code text;
 begin
-  select id, role
-    into invite_id, invite_role
-  from public.invites
-  where lower(email) = lower(trim(new.email))
-    and upper(code) = upper(trim(coalesce(new.raw_user_meta_data->>'invite_code', '')))
-    and used = false
-    and expires_at > now()
-  order by created_at desc
-  limit 1;
-
   insert into public.users (id, email, full_name, role, active)
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', ''),
-    coalesce(new.raw_user_meta_data->>'role', invite_role, 'instructor'),
+    coalesce(new.raw_user_meta_data->>'role', 'instructor'),
     true
   )
   on conflict (id) do update set
@@ -72,11 +61,20 @@ begin
     role = coalesce(excluded.role, public.users.role),
     active = coalesce(public.users.active, true);
 
-  if invite_id is not null then
-    update public.invites
-    set used = true,
-        used_at = now()
-    where id = invite_id;
+  invite_code := upper(trim(coalesce(new.raw_user_meta_data->>'invite_code', '')));
+
+  if invite_code <> '' then
+    begin
+      update public.invites
+      set used = true,
+          used_at = now()
+      where lower(email) = lower(trim(new.email))
+        and upper(code) = invite_code
+        and used = false
+        and expires_at > now();
+    exception when others then
+      null;
+    end;
   end if;
 
   return new;
